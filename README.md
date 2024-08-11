@@ -1,66 +1,61 @@
-## Foundry
+## Upgradeable Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This is a learning project based on Cyfrin Updraft foundry tutorial
 
-Foundry consists of:
+## Key Concepts
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+### Transparent Proxy vs. UUPS
 
-## Documentation
+- Transparent Proxy: Separates admin and user roles clearly, with the proxy itself handling upgrades and admin functions.
+- UUPS: Places more responsibility on the implementation contract for managing upgrades, offering more flexibility but requiring careful management.
 
-https://book.getfoundry.sh/
+### Proxy and Implementation
 
-## Usage
+- proxy contract
+  - the contract user interact with
+  - stores the contract's state and delegates calls to the implementation
+  - does not have the logic itself; it forwards requests to the implementation contract.
+- Implementation Contract
+  - contains actual logics
+  - it does not store state, except for possibly some adminitrative variabels.
 
-### Build
+### Initializable and initializer
 
-```shell
-$ forge build
+'initializer' is a modifier defined in 'Initializable' interface, it works as a 'contructor' for implementation contracts. Since the 'proxy' and 'implementation' are created separetly, the 'initializer' function can be used to set up the state of implementation contract, such as ownership.
+
+The 'initializer' can be executed both manually or automatically.
+
+```
+bytes memory data = abi.encodeWithSignature("initialize(uint256)", 42);
+ERC1967Proxy proxy = new ERC1967Proxy(address(box), data);
 ```
 
-### Test
+### delegatecall
 
-```shell
-$ forge test
-```
+1. Execution Context: The delegatecall operation causes the implementation contract's code to run in the context of the proxy contract. This means that:
+   - The proxy’s storage is accessed.
+   - The proxy’s msg.sender and msg.value are used.
+2. Shared Storage Layout: In Solidity, state variables are stored in specific storage slots. When delegatecall is used, the implementation contract's logic reads from and writes to the storage slots of the proxy contract.
 
-### Format
+### Storage Slots
 
-```shell
-$ forge fmt
-```
+- Storage Slot Assignment: In Solidity, state variables are assigned to storage slots in the order they are declared:
 
-### Gas Snapshots
+  - The first declared variable is stored in slot 0.
+  - The second in slot 1, and so on.
+    ```solidity
+    contract MyImplementation {
+        uint256 public value;  // Stored in slot 0
+    }
+    ```
 
-```shell
-$ forge snapshot
-```
+- Proxy Contract Storage: Even though the proxy contract doesn’t explicitly declare a value variable, its storage layout is still accessible to the implementation contract when delegatecall is used.
 
-### Anvil
+When delegatecall is invoked:
 
-```shell
-$ anvil
-```
+- The value variable in MyImplementation refers to storage slot 0.
+- This slot 0 is located in the proxy contract's storage.
 
-### Deploy
+Thus, when MyImplementation’s setValue function is called through the proxy:
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+- The value in slot 0 of the proxy’s storage is updated.
